@@ -1,54 +1,67 @@
 import 'dart:async';
-import 'dart:html';
-import 'dart:js' as JS;
-import 'dart:js_util' as JSUtils;
-import 'dart:html' as HTML;
+import 'dart:js_interop';
 
-class navigator {
-  static Future<MediaStream> getUserMedia(
-      Map<String, dynamic> mediaConstraints) async {
+import 'package:web/web.dart' as web;
+
+class NavigatorWeb {
+  /// Request microphone / camera
+  static Future<web.MediaStream> getUserMedia(
+    Map<String, dynamic> constraints,
+  ) async {
     try {
-      final nav = HTML.window.navigator;
-      if (mediaConstraints['video'] is Map) {
-        if (mediaConstraints['video']['facingMode'] != null) {
-          mediaConstraints['video'].remove('facingMode');
-        }
-      }
-      final jsStream = await nav.getUserMedia(
-          audio: mediaConstraints['audio'] ?? false,
-          video: mediaConstraints['video'] ?? false);
-      return MediaStream(jsStream);
+      final constraints = web.MediaStreamConstraints();
+
+      final stream = await web.window.navigator.mediaDevices
+          .getUserMedia(constraints)
+          .toDart;
+
+      return stream;
     } catch (e) {
-      throw 'Unable to getUserMedia: ${e.toString()}';
+      throw Exception("getUserMedia failed: $e");
     }
   }
 
-  static Future<MediaStream> getDisplayMedia(
-      Map<String, dynamic> mediaConstraints) async {
+  /// Request screen share
+  static Future<web.MediaStream> getDisplayMedia(
+    Map<String, dynamic> constraints,
+  ) async {
     try {
-      final mediaDevices = HTML.window.navigator.mediaDevices;
-      final JS.JsObject arg = JS.JsObject.jsify(mediaConstraints);
+      final constraints = web.DisplayMediaStreamOptions();
 
-      final HTML.MediaStream jsStream =
-          await JSUtils.promiseToFuture<HTML.MediaStream>(
-              JSUtils.callMethod(mediaDevices!, 'getDisplayMedia', [arg]));
-      return MediaStream(jsStream);
+      final stream = await web.window.navigator.mediaDevices
+          .getDisplayMedia(constraints)
+          .toDart;
+
+      return stream;
     } catch (e) {
-      throw 'Unable to getDisplayMedia: ${e.toString()}';
+      throw Exception("getDisplayMedia failed: $e");
     }
   }
 
-  static Future<List<dynamic>> getSources() async {
-    final devices = await HTML.window.navigator.mediaDevices!.enumerateDevices();
-    final result = [];
-    for (final device in devices) {
-      result.add(<String, String>{
-        'deviceId': device.deviceId,
-        'groupId': device.groupId,
-        'kind': device.kind,
-        'label': device.label
+  /// List all media devices
+static Future<List<Map<String, String>>> getSources() async {
+  try {
+    // 1. Await the JS promise
+    final jsDevicesPromise = web.window.navigator.mediaDevices.enumerateDevices();
+    final jsDevices = await jsDevicesPromise.toDart as List<Object?>;
+
+    // 2. Convert to Dart List and iterate
+    final List<Map<String, String>> list = [];
+
+    for (final device in jsDevices) {
+      final d = device as web.MediaDeviceInfo;
+      list.add({
+        'deviceId': d.deviceId ,
+        'groupId': d.groupId ,
+        'kind': d.kind ,
+        'label': d.label,
       });
     }
-    return result;
+
+    return list;
+  } catch (e) {
+    throw Exception("enumerateDevices failed: $e");
   }
+}
+
 }
